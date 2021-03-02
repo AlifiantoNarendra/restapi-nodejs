@@ -13,8 +13,14 @@ let JwtStrategy             = passportJWT.Strategy;
 let jwtOptions              = {};
 jwtOptions.jwtFromRequest   = ExtractJwt.fromAuthHeaderAsBearerToken();
 jwtOptions.secretOrKey      = "Belajar Login JWT";
+
+const swaggerJsDoc          = require ('swagger-jsdoc');
+const swaggerUi             = require ('swagger-ui-express');
+
 const port                  = process.env.PORT || 3000
  
+
+
 // parse application/json
 app.use(bodyParser.json());
  
@@ -33,7 +39,7 @@ conn.connect((err) =>{
 });
  
 //tampilkan semua data bank
-app.get('/bank', verifyToken, (req, res) => {
+app.get('/bankVerify', verifyToken, (req, res) => {
     jwt.verify(req.token, jwtOptions.secretOrKey, (err) => {
         if (err) {
             res.sendStatus(403);
