@@ -1,25 +1,43 @@
-const express               = require('express');
-const bodyParser            = require('body-parser');
-const app                   = express();
-const mysql                 = require('mysql');
-const jwt                   = require('jsonwebtoken');
+const express               = require ('express');
+const bodyParser            = require ('body-parser');
 
+// mysql
+const mysql                 = require ('mysql');
+
+// jwt
+const jwt                   = require ('jsonwebtoken');
 const passport              = require ('passport');
 const passportJWT           = require ('passport-jwt');
-
 let ExtractJwt              = passportJWT.ExtractJwt;
 let JwtStrategy             = passportJWT.Strategy;
-
 let jwtOptions              = {};
 jwtOptions.jwtFromRequest   = ExtractJwt.fromAuthHeaderAsBearerToken();
 jwtOptions.secretOrKey      = "Belajar Login JWT";
 
-const swaggerJsDoc          = require ('swagger-jsdoc');
 const swaggerUi             = require ('swagger-ui-express');
+const swaggerJsDoc          = require ('swagger-jsdoc');
 
+// port
 const port                  = process.env.PORT || 3000
+
+const app                   = express ();
  
 
+const swaggerOptions = {
+    swaggerDefinition: {
+        info: {
+            title       : "Bank API",
+            description : "Dokumentasi REST API Data Bank",
+            contact: {
+                name    : "Alifianto Narendra"
+            },
+            servers     : ["http://localhost:3000"]
+        }
+    },
+    apis    : ["app.js"]
+};
+
+// const swaggerDocs   = swaggerJsDoc(swaggerOptions);
 
 // parse application/json
 app.use(bodyParser.json());
@@ -44,8 +62,8 @@ app.get('/bankVerify', verifyToken, (req, res) => {
         if (err) {
             res.sendStatus(403);
         } else {
-            let sql = "SELECT * FROM tb_bank";
-            let query = conn.query(sql, (err, results) => {
+            let sql     = "SELECT * FROM tb_bank";
+            let query   = conn.query(sql, (err, results) => {
                 if(err) throw err;
                  res.json({
                      "status": 200, 
