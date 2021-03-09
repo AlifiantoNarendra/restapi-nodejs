@@ -27,19 +27,20 @@ const port = process.env.PORT || 3000;
 const app = express();
 
 const options = {
-  definition: {
-    openapi: "3.0.0",
-    info: {
-      title: "Bank API",
-      description: "Dokumentasi REST API Data Bank",
-      version: "1.0.0",
-      contact: {
-        name: "Alifianto Narendra",
+   definition: {
+      swagger: "2.0",
+      info: {
+         title: "Bank API",
+         description: "Dokumentasi REST API Data Bank",
+         version: "1.0.0",
+         contact: {
+            name: "Alifianto Narendra",
+         },
+         servers: ["http://localhost:3000"],
       },
-      servers: ["http://localhost:3000"],
-    },
-  },
-  apis: ["app.js"], // files containing annotations as above
+      schemes: ["http", "https"],
+   },
+   apis: ["app.js"], // files containing annotations as above
 };
 
 const openapiSpecification = await swaggerJsDoc(options);
@@ -50,104 +51,147 @@ app.use(bodyParser.json());
 
 // create database connection
 const conn = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "",
-  database: "valas",
+   host: "localhost",
+   user: "root",
+   password: "",
+   database: "valas",
 });
 
 //connect to database
 conn.connect((err) => {
-  if (err) throw err;
-  console.log("Mysql Connected...");
+   if (err) throw err;
+   console.log("Mysql Connected...");
 });
 
 //tampilkan semua data bank
 /**
- * @openapi
+ * @swagger
  * /:
  *   get:
  *     description: Menampilkan Semua Data Bank
+ *     consumes:
+ *        - application/json
+ *        - application/xml
  *     responses:
  *       200:
  *         description: Berhasil Menampilkan Semua Data Bank
  */
 app.get("/", (req, res) => {
-  let sql = "SELECT * FROM tb_bank";
-  let query = conn.query(sql, (err, results) => {
-    if (err) throw err;
-    res.json({
-      status: 200,
-      error: null,
-      response: results,
-    });
-  });
+   let sql = "SELECT * FROM tb_bank";
+   let query = conn.query(sql, (err, results) => {
+      if (err) throw err;
+      res.json({
+         status: 200,
+         error: null,
+         response: results,
+      });
+   });
 });
 
 // Tambahkan data bank baru
 /**
- * @openapi
+ * @swagger
  * /:
- *   post:
+ *  post:
  *     description: Menambahkan Data Bank
- *     responses:
- *       200:
- *         description: Berhasil Menambahkan Semua Data Bank
+ *     parameters:
+ *       name: reqBody
+ *       in: body
+ *       schema:
+ *          type: object
+ *          properties:
+ *             nama:
+ *                type: string
+ *             url:
+ *                type: string
+ *             logo:
+ *                type: string
+ *             status:
+ *                type: string
+ *          required:
+ *             - nama
+ *             - url
+ *             - logo
+ *             - status
+ *     response:
+ *        '200':
+ *           description: Success
+ *
  */
 
-app.post("/", (req, res) => {
-  let data = { nama: req.body.nama, url: req.body.url, logo: req.body.logo, status: req.body.status };
-  let sql = "INSERT INTO tb_bank SET ?";
-  let query = conn.query(sql, data, (err, results) => {
-    if (err) throw err;
-    res.json({
-      status: 200,
-      error: null,
-      response: results,
-    });
-  });
+app.post("/", express.json(), (req, res) => {
+   // res.status(200).json({
+   //    newNama: req.body.nama,
+   //    newUrl: req.body.url,
+   //    newLogo: req.body.logo,
+   //    newStatus: req.body.status,
+   // });
+   let data = { nama: req.body.nama, url: req.body.url, logo: req.body.logo, status: req.body.status };
+   let sql = "INSERT INTO tb_bank SET ?";
+   let query = conn.query(sql, data, (err, results) => {
+      if (err) throw err;
+      res.json({
+         status: 200,
+         error: null,
+         response: results,
+      });
+   });
 });
 
 // Edit data bank berdasarkan id
 /**
- * @openapi
- * /:
+ * @swagger
+ * /{id}:
  *   put:
+ *     tags:
+ *        - ID param
  *     description: Menambahkan Data Bank
  *     responses:
  *       200:
  *         description: Berhasil Menambahkan Semua Data Bank
  */
 
-app.put("/bank/:id", (req, res) => {
-  let sql = "UPDATE tb_bank SET nama='" + req.body.nama + "', url='" + req.body.url + "', logo='" + req.body.logo + "', status='" + req.body.status + "' WHERE id=" + req.params.id;
-  let query = conn.query(sql, (err, results) => {
-    if (err) throw err;
-    res.json({
-      status: 200,
-      error: null,
-      response: "Success",
-    });
-  });
+app.put("/:id", (req, res) => {
+   let sql = "UPDATE tb_bank SET nama='" + req.body.nama + "', url='" + req.body.url + "', logo='" + req.body.logo + "', status='" + req.body.status + "' WHERE id=" + req.params.id;
+   let query = conn.query(sql, (err, results) => {
+      if (err) throw err;
+      res.json({
+         status: 200,
+         error: null,
+         response: "Success",
+      });
+   });
 });
 
 //Delete data bank berdasarkan id
 /**
- * @openapi
- * /:
+ * @swagger
+ * /{id}:
  *   delete:
- *     description: Menambahkan Data Bank
+ *     tags:
+ *        - ID param
+ *     description: Menghapus Data Bank
+ *     parameters:
+ *        - name: id
+ *          description: masukkan id untuk menghapus data
+ *          in: path
+ *          type: integer
+ *          required: true
  *     responses:
- *       200:
- *         description: Berhasil Menambahkan Semua Data Bank
+ *       '200':
+ *         description: Berhasil Menghapus Semua Data Bank
  */
 
-app.delete("/bank/:id", (req, res) => {
-  let sql = "DELETE FROM tb_bank WHERE id=" + req.params.id + "";
-  let query = conn.query(sql, (err, results) => {
-    if (err) throw err;
-    res.send(JSON.stringify({ status: 200, error: null, response: "Success" }));
-  });
+app.delete("/:id", (req, res) => {
+   let sql = "DELETE FROM tb_bank WHERE id=" + req.params.id + "";
+   let query = conn.query(sql, (err, results) => {
+      if (err) throw err;
+      res.json({
+         status: 200,
+         error: null,
+         response: "Success",
+      });
+   });
 });
 
 // app.get("/bankVerify", verifyToken, (req, res) => {
@@ -184,7 +228,7 @@ app.delete("/bank/:id", (req, res) => {
 
 //Server listening
 app.listen(port, () => {
-  console.log(`Server started on ${port}`);
+   console.log(`Server started on ${port}`);
 });
 
 // //tampilkan data bank berdasarkan id
