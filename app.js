@@ -39,6 +39,15 @@ const options = {
          servers: ["http://localhost:3000"],
       },
       schemes: ["http", "https"],
+      securityDefinitions: {
+         auth: {
+            type: "apiKey",
+            name: "Authorization",
+            scheme: "bearer",
+            in: "header",
+            bearerFormat: "JWT",
+         },
+      },
    },
    apis: ["app.js"], // files containing annotations as above
 };
@@ -63,21 +72,194 @@ conn.connect((err) => {
    console.log("Mysql Connected...");
 });
 
+let strategy = new JwtStrategy(jwtOptions, (jwt_payload, next) => {
+   let user = getUser({
+      id: jwt_payload.id,
+   });
+   if (user) {
+      next(null, user);
+   } else {
+      next(null, false);
+   }
+});
+
+passport.use(strategy);
+
+const getUser = async (obj) => {
+   return await User.findOne({
+      where: obj,
+   });
+};
+
+app.use(
+   express.urlencoded({
+      extended: true,
+   })
+);
+
+// db
+export const db = new sequelize("nodelogin", "root", "", {
+   dialect: "mysql",
+});
+
+db.sync({});
+
+// User
+export const User = db.define("user", {
+   username: {
+      type: sequelize.STRING,
+   },
+   password: {
+      type: sequelize.STRING,
+   },
+});
+
+User.sync({});
+
+db.authenticate().then(() => console.log("Database Terkoneksi"));
+
+// app.get("/", (req, res) => res.send("Node bisa dibuka di REST api"));
+
+/**
+ * @swagger
+ * /login:
+ *    get:
+ *       tags:
+ *          - User
+ *       summary: Login User
+ *       description: Login Untuk mendapatkan token
+ *       parameters:
+ *        - name: username
+ *          description: masukkan username
+ *          in: query
+ *          type: string
+ *          required: true
+ *        - name: password
+ *          description: masukkan password
+ *          in: query
+ *          type: string
+ *          required: true
+ *       responses:
+ *          '200':
+ *             description: Berhasil Menambahkan Semua Data Bank
+ */
+
+app.get("/login", async (req, res) => {
+   try {
+      const { username, password } = req.query;
+
+      if (username && password) {
+         let user = await getUser({
+            username: username,
+         });
+         if (!user) {
+            res.status(401).json({
+               message: "Username Salah Atau Anda Belum Terdaftar",
+            });
+         }
+         if (user.password === password) {
+            let payload = {
+               id: user.id,
+            };
+            let token = jwt.sign(payload, jwtOptions.secretOrKey);
+            res.json({
+               message: "Berhasil Login",
+               token: token,
+            });
+         } else {
+            res.status(401).json({
+               message: "Password Salah",
+            });
+         }
+      }
+   } catch (err) {
+      console.error(err.message);
+      res.status(500).send("Server Error");
+   }
+});
+
 //tampilkan semua data bank
 /**
  * @swagger
  * /:
  *   get:
+ *     security:
+ *       - auth: []
+ *     tags:
+ *       - Bank
+ *     summary: Menampilkan semua Data Bank
  *     description: Menampilkan Semua Data Bank
  *     consumes:
  *        - application/json
  *        - application/xml
  *     responses:
- *       200:
+ *       '200':
  *         description: Berhasil Menampilkan Semua Data Bank
  */
-app.get("/", (req, res) => {
-   let sql = "SELECT * FROM tb_bank";
+
+app.get("/", verifyToken, (req, res) => {
+   jwt.verify(req.token, jwtOptions.secretOrKey, (err) => {
+      if (err) {
+         res.sendStatus(403);
+      } else {
+         let sql = "SELECT * FROM tb_bank";
+         let query = conn.query(sql, (err, results) => {
+            if (err) throw err;
+            res.json({
+               status: 200,
+               error: null,
+               response: results,
+            });
+         });
+      }
+   });
+});
+
+//tampilkan data bank berdasarkan id
+/**
+ * @swagger
+ * /{id}:
+ *   get:
+ *     security:
+ *       - auth: []
+ *     tags:
+ *       - Bank
+ *     summary: Menampilkan Data Bank berdasarkan ID
+ *     description: Menampilkan Data Bank berdasarkan ID
+ *     consumes:
+ *        - application/json
+ *        - application/xml
+ *     parameters:
+ *        - name: id
+ *          description: masukkan ID untuk menampilkan data berdasarkan ID
+ *          in: path
+ *          type: integer
+ *          required: true
+ *     responses:
+ *       '200':
+ *         description: Berhasil Menampilkan Semua Data Bank
+ */
+
+app.get("/:id", verifyToken, express.json(), (req, res) => {
+   jwt.verify(req.token, jwtOptions.secretOrKey, (err) => {
+      if (err) {
+         res.sendStatus(403);
+      } else {
+         let sql = "SELECT * FROM tb_bank WHERE id=" + req.params.id;
+         let query = conn.query(sql, (err, results) => {
+            if (err) throw err;
+            res.json({
+               status: 200,
+               error: null,
+               response: results,
+            });
+         });
+      }
+   });
+});
+
+app.get("/:id", (req, res) => {
+   let sql = "SELECT * FROM tb_bank WHERE id=" + req.params.id;
    let query = conn.query(sql, (err, results) => {
       if (err) throw err;
       res.json({
@@ -92,49 +274,49 @@ app.get("/", (req, res) => {
 /**
  * @swagger
  * /:
- *  post:
- *     description: Menambahkan Data Bank
- *     parameters:
- *       name: reqBody
- *       in: body
- *       schema:
- *          type: object
- *          properties:
- *             nama:
- *                type: string
- *             url:
- *                type: string
- *             logo:
- *                type: string
- *             status:
- *                type: string
- *          required:
- *             - nama
- *             - url
- *             - logo
- *             - status
- *     response:
- *        '200':
- *           description: Success
- *
+ *    post:
+ *       security:
+ *          - auth: []
+ *       tags:
+ *          - Bank
+ *       summary: Tambah Data Bank
+ *       description: Tambah Data Bank
+ *       parameters:
+ *        - name: body
+ *          description: Tambah Data Bank
+ *          in: body
+ *          required: true
+ *          schema:
+ *             properties:
+ *                nama:
+ *                   type: string
+ *                url:
+ *                   type: string
+ *                logo:
+ *                   type: string
+ *                status:
+ *                   type: string
+ *       responses:
+ *          '200':
+ *             description: Berhasil Menambahkan Data Bank
  */
 
-app.post("/", express.json(), (req, res) => {
-   // res.status(200).json({
-   //    newNama: req.body.nama,
-   //    newUrl: req.body.url,
-   //    newLogo: req.body.logo,
-   //    newStatus: req.body.status,
-   // });
-   let data = { nama: req.body.nama, url: req.body.url, logo: req.body.logo, status: req.body.status };
-   let sql = "INSERT INTO tb_bank SET ?";
-   let query = conn.query(sql, data, (err, results) => {
-      if (err) throw err;
-      res.json({
-         status: 200,
-         error: null,
-         response: results,
-      });
+app.post("/", verifyToken, express.json(), (req, res) => {
+   jwt.verify(req.token, jwtOptions.secretOrKey, (err) => {
+      if (err) {
+         res.sendStatus(403);
+      } else {
+         let data = { nama: req.body.nama, url: req.body.url, logo: req.body.logo, status: req.body.status };
+         let sql = "INSERT INTO tb_bank SET ?";
+         let query = conn.query(sql, data, (err, results) => {
+            if (err) throw err;
+            res.json({
+               status: 200,
+               error: null,
+               response: "Success",
+            });
+         });
+      }
    });
 });
 
@@ -142,24 +324,53 @@ app.post("/", express.json(), (req, res) => {
 /**
  * @swagger
  * /{id}:
- *   put:
- *     tags:
- *        - ID param
- *     description: Menambahkan Data Bank
- *     responses:
- *       200:
- *         description: Berhasil Menambahkan Semua Data Bank
+ *    put:
+ *       security:
+ *          - auth: []
+ *       tags:
+ *          - Bank
+ *       summary: Edit Data Bank
+ *       description: Tambah Data Bank
+ *       parameters:
+ *        - name: id
+ *          description: masukkan id untuk edit data
+ *          in: path
+ *          type: integer
+ *          required: true
+ *        - name: body
+ *          description: Tambah Data Bank
+ *          in: body
+ *          required: true
+ *          schema:
+ *             properties:
+ *                nama:
+ *                   type: string
+ *                url:
+ *                   type: string
+ *                logo:
+ *                   type: string
+ *                status:
+ *                   type: string
+ *       responses:
+ *          '200':
+ *             description: Berhasil edit Data Bank
  */
 
-app.put("/:id", (req, res) => {
-   let sql = "UPDATE tb_bank SET nama='" + req.body.nama + "', url='" + req.body.url + "', logo='" + req.body.logo + "', status='" + req.body.status + "' WHERE id=" + req.params.id;
-   let query = conn.query(sql, (err, results) => {
-      if (err) throw err;
-      res.json({
-         status: 200,
-         error: null,
-         response: "Success",
-      });
+app.put("/:id", verifyToken, express.json(), (req, res) => {
+   jwt.verify(req.token, jwtOptions.secretOrKey, (err) => {
+      if (err) {
+         res.sendStatus(403);
+      } else {
+         let sql = "UPDATE tb_bank SET nama='" + req.body.nama + "', url='" + req.body.url + "', logo='" + req.body.logo + "', status='" + req.body.status + "' WHERE id=" + req.params.id;
+         let query = conn.query(sql, (err, results) => {
+            if (err) throw err;
+            res.json({
+               status: 200,
+               error: null,
+               response: "Success",
+            });
+         });
+      }
    });
 });
 
@@ -168,196 +379,56 @@ app.put("/:id", (req, res) => {
  * @swagger
  * /{id}:
  *   delete:
- *     tags:
- *        - ID param
- *     description: Menghapus Data Bank
- *     parameters:
- *        - name: id
- *          description: masukkan id untuk menghapus data
- *          in: path
- *          type: integer
- *          required: true
- *     responses:
- *       '200':
- *         description: Berhasil Menghapus Semua Data Bank
+ *       security:
+ *          - auth: []
+ *       tags:
+ *         - Bank
+ *       summary: Hapus Data Bank
+ *       description: Menghapus Data Bank
+ *       parameters:
+ *          - name: id
+ *            description: masukkan id untuk menghapus data
+ *            in: path
+ *            type: integer
+ *            required: true
+ *       responses:
+ *          '200':
+ *             description: Berhasil Menghapus Semua Data Bank
  */
 
-app.delete("/:id", (req, res) => {
-   let sql = "DELETE FROM tb_bank WHERE id=" + req.params.id + "";
-   let query = conn.query(sql, (err, results) => {
-      if (err) throw err;
-      res.json({
-         status: 200,
-         error: null,
-         response: "Success",
-      });
+app.delete("/:id", verifyToken, express.json(), (req, res) => {
+   jwt.verify(req.token, jwtOptions.secretOrKey, (err) => {
+      if (err) {
+         res.sendStatus(403);
+      } else {
+         let sql = "DELETE FROM tb_bank WHERE id=" + req.params.id + "";
+         let query = conn.query(sql, (err, results) => {
+            if (err) throw err;
+            res.json({
+               status: 200,
+               error: null,
+               response: "Success",
+            });
+         });
+      }
    });
 });
 
-// app.get("/bankVerify", verifyToken, (req, res) => {
-//   jwt.verify(req.token, jwtOptions.secretOrKey, (err) => {
-//     if (err) {
-//       res.sendStatus(403);
-//     } else {
-//       let sql = "SELECT * FROM tb_bank";
-//       let query = conn.query(sql, (err, results) => {
-//         if (err) throw err;
-//         res.json({
-//           status: 200,
-//           error: null,
-//           response: results,
-//         });
-//       });
-//     }
-//   });
-// });
-
-// function verifyToken(req, res, next) {
-//   const bearerHeader = req.headers["authorization"];
-//   if (typeof bearerHeader !== "undefined") {
-//     const bearer = bearerHeader.split(" ");
-//     const bearerToken = bearer[1];
-//     req.token = bearerToken;
-//     next();
-//   } else {
-//     res.json({
-//       message: "Token Expired",
-//     });
-//   }
-// }
+function verifyToken(req, res, next) {
+   const bearerHeader = req.headers["authorization"];
+   if (typeof bearerHeader !== "undefined") {
+      const bearer = bearerHeader.split(" ");
+      const bearerToken = bearer[1];
+      req.token = bearerToken;
+      next();
+   } else {
+      res.json({
+         message: "Token Expired",
+      });
+   }
+}
 
 //Server listening
 app.listen(port, () => {
    console.log(`Server started on ${port}`);
 });
-
-// //tampilkan data bank berdasarkan id
-// app.get('/bank/:id',(req, res) => {
-//   let sql = "SELECT * FROM tb_bank WHERE id="+req.params.id;
-//   let query = conn.query(sql, (err, results) => {
-//     if(err) throw err;
-//     res.send(JSON.stringify({"status": 200, "error": null, "response": results}));
-//   });
-// });
-
-// let strategy    = new JwtStrategy (jwtOptions, (jwt_payload, next) => {
-//     let user    = getUser({
-//         id: jwt_payload.id
-//     })
-//     if (user) {
-//         next (null, user);
-//     } else {
-//         next (null, false);
-//     }
-// });
-
-// passport.use (strategy);
-
-// const getUser   = async obj => {
-//     return await User.findOne({
-//         where:obj
-//     })
-// }
-
-// app.use(express.urlencoded ({
-//     extended    : true
-// }) );
-
-// // db
-// export const db        = new sequelize("nodelogin", "root", "", {
-//     dialect : "mysql"
-// });
-
-// db.sync({});
-
-// // User
-// export const User  = db.define(
-//     "user",
-//     {
-//         username    : {
-//             type    : sequelize.STRING
-//         },
-//         password    : {
-//             type    : sequelize.STRING
-//         }
-//     }
-// );
-
-// User.sync({});
-
-// db.authenticate().then( () => console.log ('Database Terkoneksi') );
-
-// app.get('/', (req, res) => res.send("Node bisa dibuka di REST api"));
-
-// app.post('/login', async (req, res) => {
-//     try {
-//         const {
-//             username, password
-//         } = req.body
-
-//         if (username && password) {
-//             let user    = await getUser ({
-//                 username: username
-//             });
-//             if (!user) {
-//                 res.status(401).json({
-//                     message: 'Username Salah Atau Anda Belum Terdaftar'
-//                 });
-//             }
-//             if (user.password === password) {
-//                 let payload = {
-//                     id: user.id
-//                 }
-//                 let token   = jwt.sign(payload, jwtOptions.secretOrKey);
-//                  res.json({
-//                      message: "Berhasil Login",
-//                      token  : token
-//                  });
-//             } else {
-//                 res.status(401).json({
-//                     message: 'Password Salah'
-//                 })
-//             }
-//         }
-//     } catch (err) {
-//         console.error(err.message);
-//         res.status(500).send('Server Error');
-//     }
-// });
-
-// app.get('/verify', verifyToken, (req, res) => {
-
-//     jwt.verify(req.token, jwtOptions.secretOrKey, (err, authData) => {
-//         if (err) {
-//             res.sendStatus(403);
-//         } else {
-//             let sql = "SELECT * FROM tb_bank";
-//             let query = conn.query(sql, (err, results) => {
-//                 if(err) throw err;
-//                  res.json({
-//                      "status": 200,
-//                      "error": null,
-//                      "response": results
-//                 });
-//             });
-//         }
-//     });
-// });
-
-// app.post('/register', async (req, res) => {
-//     try {
-//         const {
-//             username, password
-//         } = req.body
-
-//         const newUser   = new User ({
-//             username, password
-//         })
-
-//         await newUser.save();
-//          res.json(newUser);
-//     } catch (err) {
-//         console.error(err.message);
-//         res.status(500).send('Server Error');
-//     }
-// });
