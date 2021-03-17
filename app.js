@@ -66,10 +66,22 @@ const conn = mysql.createConnection({
    database: "valas",
 });
 
+const connect = mysql.createConnection({
+   host: "localhost",
+   user: "root",
+   password: "",
+   database: "nodelogin",
+});
+
 //connect to database
 conn.connect((err) => {
    if (err) throw err;
-   console.log("Mysql Connected...");
+   console.log("Mysql1 Connected...");
+});
+
+connect.connect((err) => {
+   if (err) throw err;
+   console.log("Mysql2 Connected...");
 });
 
 let strategy = new JwtStrategy(jwtOptions, (jwt_payload, next) => {
@@ -120,6 +132,7 @@ db.authenticate().then(() => console.log("Database Terkoneksi"));
 
 // app.get("/", (req, res) => res.send("Node bisa dibuka di REST api"));
 
+// login
 /**
  * @swagger
  * /login:
@@ -176,6 +189,44 @@ app.get("/login", async (req, res) => {
       console.error(err.message);
       res.status(500).send("Server Error");
    }
+});
+
+// register
+/**
+ * @swagger
+ * /register:
+ *    post:
+ *       tags:
+ *          - User
+ *       summary: Register User
+ *       description: Register User
+ *       parameters:
+ *        - name: username
+ *          description: masukkan username
+ *          in: query
+ *          type: string
+ *          required: true
+ *        - name: password
+ *          description: masukkan password
+ *          in: query
+ *          type: string
+ *          required: true
+ *       responses:
+ *          '200':
+ *             description: Berhasil Register
+ */
+
+app.post("/register", express.json(), (req, res) => {
+   let data = { username: req.query.username, password: req.query.password };
+   let sql = "INSERT INTO users SET ?";
+   let register = connect.query(sql, data, (err, results) => {
+      if (err) throw err;
+      res.json({
+         status: 200,
+         error: null,
+         response: "Success",
+      });
+   });
 });
 
 //tampilkan semua data bank
@@ -237,7 +288,7 @@ app.get("/", verifyToken, (req, res) => {
  *          required: true
  *     responses:
  *       '200':
- *         description: Berhasil Menampilkan Semua Data Bank
+ *         description: Berhasil Menampilkan Data Bank berdasarkan id
  */
 
 app.get("/:id", verifyToken, express.json(), (req, res) => {
@@ -353,7 +404,7 @@ app.post("/", verifyToken, express.json(), (req, res) => {
  *                   type: string
  *       responses:
  *          '200':
- *             description: Berhasil edit Data Bank
+ *             description: Berhasil edit Data Bank berdasarkan id
  */
 
 app.put("/:id", verifyToken, express.json(), (req, res) => {
@@ -393,7 +444,7 @@ app.put("/:id", verifyToken, express.json(), (req, res) => {
  *            required: true
  *       responses:
  *          '200':
- *             description: Berhasil Menghapus Semua Data Bank
+ *             description: Berhasil Menghapus Data Bank berdasarkan id
  */
 
 app.delete("/:id", verifyToken, express.json(), (req, res) => {
